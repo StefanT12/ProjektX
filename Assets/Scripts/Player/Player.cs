@@ -54,7 +54,7 @@ namespace Assets.Scripts.Player
         private float _dampenedOrientation;
         private RaycastHit[] _buff;
         private RaycastHit _closestGroundHit;
-        private float _movementInputYMagnitude;
+        //private float _movementInputYMagnitude;
 
         private void Awake()
         {
@@ -85,7 +85,7 @@ namespace Assets.Scripts.Player
             void RecalculateMovementInput()
             {
                 Movement = (int)(movementInput.y + 1 + (sprintInput * Mathf.Clamp01(movementInput.y)));
-                _movementInputYMagnitude = Mathf.Abs(movementInput.y);
+                //_movementInputYMagnitude = Mathf.Abs(movementInput.y);
             }
             void RecalcuateOrientation()
             {
