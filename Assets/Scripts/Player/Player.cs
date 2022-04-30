@@ -25,13 +25,15 @@ namespace Assets.Scripts.Player
         [field: Header("Movement & Rotation")]
 
         [field: SerializeField]
-        public float RotationRadiansPerSec { get; set; } = 200f;
-        [field: SerializeField]
         public float GravitationalAcceleration { get; set; } = 9.8f;
         [field: SerializeField]
         public float DampenedMovementSpeedFactor { get; set; } = 3f;
         public float[] MovementSpeeds = new float[4];
         public float[] OrientationSpeedFactors= new float[4];
+
+        [field: SerializeField]
+        public float RadiansPerSecAdaptSpeed { get; set; } = 3f;
+        public float[] RadiansPerSecFactors = new float[4];
 
         [field: Header("Physics")]
         [field: SerializeField]
@@ -149,10 +151,12 @@ namespace Assets.Scripts.Player
             
         }
 
+        private float _radiansPerSec;
         //rotations must be set after the simulation but within the same framerate as FixedUpdate
         private void LateFixedUpdate()
         {
-            _rBody.MoveRotation(transform.rotation * Quaternion.Lerp(_anim.deltaRotation, Quaternion.Euler(0f, _dampenedOrientation * RotationRadiansPerSec * Time.fixedDeltaTime, 0f), _movementInputYMagnitude));
+            _radiansPerSec = Mathf.Lerp(_radiansPerSec, RadiansPerSecFactors[Movement], Time.deltaTime * RadiansPerSecAdaptSpeed);
+            _rBody.MoveRotation(transform.rotation * Quaternion.Lerp(_anim.deltaRotation, Quaternion.Euler(0f, _dampenedOrientation * _radiansPerSec * Time.fixedDeltaTime, 0f), 1));//_movementInputYMagnitude));
         }
     }
 }

@@ -16,8 +16,8 @@ public class AnimatorHandler : MonoBehaviour
 
     public void UpdateMovementValues(float verticalMovement, float horizontalMovement, float delta)
     {
-        _anim.SetFloat(_vertical, verticalMovement, 0.1f, delta);
-        _anim.SetFloat(_horizontal, horizontalMovement, 0.1f, delta);
+        _anim.SetFloat(_vertical, verticalMovement);
+        _anim.SetFloat(_horizontal, horizontalMovement, 0.1f, delta);//best explanation of dampTime here: https://answers.unity.com/questions/611667/damptime-and-deltatime-in-setfloat-parameters.html
     }
 
     public void PlayTargetState(string targetStateName, bool isInteracting)
