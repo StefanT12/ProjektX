@@ -25,10 +25,15 @@ public class CameraRig : MonoBehaviour
     [field: Header("Pivoting And Looking")]
 
     [field: SerializeField]
-    public float FollowSpeed { get; set; } = 60;
-    
+    public float FollowSpeedsAdaptSpeed { get; set; } = 6;
+    public float[] FollowSpeeds = new float[4];
+
+
     [field: SerializeField]
-    public float RotationSpeed { get; set; } = 3;
+    public float RotationSpeedsAdaptSpeed { get; set; } = 3;
+
+    public float[] RotationSpeeds = new float[4];
+
 
     [field: SerializeField]
     public float CamPivotSpeed { get; set; } = .00005f;
@@ -48,6 +53,7 @@ public class CameraRig : MonoBehaviour
     public float[] LookLRPositionCompensatorSpeeds = new float[4];
 
     public float[] ViewportDesiredLROffsetFromCenter = new float[4];
+
 
     [field: Header("Collision")]
 
@@ -82,10 +88,14 @@ public class CameraRig : MonoBehaviour
         _buff = new RaycastHit[BufferSize];
     }
 
+    private float _rotationSpeed;
+    private float _followSpeed;
     private void LateUpdate()
     {
         _dampenedOrientation = Mathf.Lerp(_dampenedOrientation, Player.Orientation, LookLRPositionCompensatorSpeeds[Player.Movement] * Time.deltaTime);
-        
+        _rotationSpeed = Mathf.Lerp(_rotationSpeed, RotationSpeeds[Player.Movement], RotationSpeedsAdaptSpeed * Time.deltaTime);
+        _followSpeed = Mathf.Lerp(_followSpeed, FollowSpeeds[Player.Movement], FollowSpeedsAdaptSpeed * Time.deltaTime);
+
         var pivotOffset = new Vector3(0, _pivotYAdditive + CamPivotOffsetFromPlayerY, 0);
         var camDist = Mathf.Max(GetCollisionAdjustedDis(Player.Transform.position+pivotOffset, _zoomPerc), ClosenessConstraint);
         
@@ -98,19 +108,11 @@ public class CameraRig : MonoBehaviour
                 0.5f, //middle of the screen
                 camDist));
 
-        transform.position = Vector3.SmoothDamp(transform.position, transform.position + translateDiff , ref _velSmoothDampDump, FollowSpeed * Time.deltaTime);
+        transform.position = Vector3.SmoothDamp(transform.position, transform.position + translateDiff , ref _velSmoothDampDump, _followSpeed * Time.deltaTime);
 
-        var pivotPos = Player.Transform.position + Player.Transform.forward * camDist - new Vector3(0, _pivotYAdditive, 0);
+        var desiredCamDir = (Player.Transform.position + Player.Transform.forward * camDist - new Vector3(0, _pivotYAdditive, 0) - Player.Transform.position).normalized;
 
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation((pivotPos - Player.Transform.position).normalized), RotationSpeed * Time.deltaTime);
-        //transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation((pivotPos + translateDiff - Player.Transform.position).normalized), RotationSpeed * Time.deltaTime);
-        
-        if (DebugCamera)
-        {
-            var desiredCamPos = transform.position + translateDiff;
-            Debug.DrawLine(desiredCamPos, pivotPos, Color.blue);
-            Debug.DrawLine(desiredCamPos + Vector3.up * (PivotLimit.x + CamPivotOffsetFromPlayerY) - pivotOffset, desiredCamPos + Vector3.up * (PivotLimit.y+ CamPivotOffsetFromPlayerY) - pivotOffset, Color.red);
-        }
+        transform.forward += (desiredCamDir - transform.forward) * Mathf.Clamp((transform.forward - desiredCamDir).magnitude, 0, Time.deltaTime * _rotationSpeed);
     }
 
     private float GetCollisionAdjustedDis(Vector3 playerPos, float distPercentage)
