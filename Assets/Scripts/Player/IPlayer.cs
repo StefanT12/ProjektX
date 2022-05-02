@@ -14,6 +14,6 @@ namespace Assets.Scripts.Player
         Transform Transform { get; }
         int Orientation { get; }
         int Movement { get; }
-        bool IsGrounded { get; }
+        int IsGrounded { get; }
     }
 }

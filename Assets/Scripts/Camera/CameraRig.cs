@@ -3,12 +3,39 @@ using Assets.Utilities;
 using System;
 using UnityEngine;
 
-
 public class CameraRig : MonoBehaviour
-{
-    [field: SerializeField]
-    public bool DebugCamera { get; set; } = true;
+{ 
+    [Serializable]
+    public class PlayerStateModifier
+    {
+        [field: SerializeField]
+        public float CamDist { get; set; }
+        [field: SerializeField]
+        public float FollowDampFactor { get; set; }
+        [field: SerializeField]
+        public float RotationSpeed { get; set; }
+        [field: SerializeField]
+        public float LookLRPositionCompensatorSpeed { get; set; }
+        [field: SerializeField]
+        public float ViewportDesiredLROffsetFromCenter { get; set; }
+    }
 
+    [field: Header("States")]
+    
+    [field: SerializeField]
+    public float CamDistsAdaptSpeed { get; set; } = 3f;
+
+    [field: SerializeField]
+    public float FollowDampFactorAdaptSpeed { get; set; } = 6;
+
+    [field: SerializeField]
+    public float RotationSpeedsAdaptSpeed { get; set; } = 3;
+
+    //[NamedArray(new string[] { "BackwardsWalk", "Idle", "Walk/Run", "Sprint", "Airborne" })]
+
+    public PlayerStateModifier[] PlayerStateModifiers = new PlayerStateModifier[5];
+
+    
     [field: Header("Follow")]
 
     [SerializeField, RequireInterface(typeof(IPlayer))]
@@ -16,25 +43,10 @@ public class CameraRig : MonoBehaviour
     public IPlayer Player => _player as IPlayer;
 
     [field: SerializeField]
-    public float CamDistsAdaptSpeed { get; set; } = 3f;
-    public float[] CamDists = new float[4];
-
-    [field: SerializeField]
     public int ZoomStages { get; set; } = 10;
 
 
     [field: Header("Pivoting And Looking")]
-
-    [field: SerializeField]
-    public float FollowSpeedsAdaptSpeed { get; set; } = 6;
-    public float[] FollowSpeeds = new float[4];
-
-
-    [field: SerializeField]
-    public float RotationSpeedsAdaptSpeed { get; set; } = 3;
-
-    public float[] RotationSpeeds = new float[4];
-
 
     [field: SerializeField]
     public float CamPivotSpeed { get; set; } = .00005f;
@@ -45,17 +57,7 @@ public class CameraRig : MonoBehaviour
     [field: SerializeField]
     public Vector2 PivotLimit { get; set; }
 
-
-    [field: Header("Left & Right Compensation")]
-
-    [field: SerializeField]
-    public Vector2 LookLRPositionCompensatorLimits { get; set; }
-
-    public float[] LookLRPositionCompensatorSpeeds = new float[4];
-
-    public float[] ViewportDesiredLROffsetFromCenter = new float[4];
-
-
+    
     [field: Header("Collision")]
 
     [field: SerializeField]
@@ -75,9 +77,9 @@ public class CameraRig : MonoBehaviour
 
     private void Start()
     {
-        if (LookLRPositionCompensatorSpeeds == null || LookLRPositionCompensatorSpeeds.Length < 4)
+        if (PlayerStateModifiers == null || PlayerStateModifiers.Length < 4)
         {
-            throw new Exception("Set 4 different speeds for LookLRPositionCompensatorSpeeds please!");
+            throw new Exception("Set 4 different states!");
         }
 
         Player.Brain.OnLook.AddListener(v => { _pivotYAdditive = Mathf.Clamp(_pivotYAdditive - v.y * CamPivotSpeed, PivotLimit.x, PivotLimit.y); });
@@ -85,6 +87,8 @@ public class CameraRig : MonoBehaviour
         _buff = new RaycastHit[BufferSize];
     }
 
+    private int _PLAYER_STATE;
+    
     private Vector3 _velSmoothDampDump;
     private float _rotationSpeed;
     private float _followSpeed;
@@ -92,10 +96,12 @@ public class CameraRig : MonoBehaviour
     private float _dampenedOrientation;
     private void LateUpdate()
     {
-        _dampenedOrientation = Mathf.Lerp(_dampenedOrientation, Player.Orientation, LookLRPositionCompensatorSpeeds[Player.Movement] * Time.deltaTime);
-        _rotationSpeed = Mathf.Lerp(_rotationSpeed, RotationSpeeds[Player.Movement], RotationSpeedsAdaptSpeed * Time.deltaTime);
-        _followSpeed = Mathf.Lerp(_followSpeed, FollowSpeeds[Player.Movement], FollowSpeedsAdaptSpeed * Time.deltaTime);
-        _camDist = Mathf.Lerp(_camDist, CamDists[Player.Movement], CamDistsAdaptSpeed * Time.deltaTime);
+        _PLAYER_STATE = Player.Movement * Player.IsGrounded + 4 * (1 - Player.IsGrounded);
+
+        _dampenedOrientation = Mathf.Lerp(_dampenedOrientation, Player.Orientation, PlayerStateModifiers[_PLAYER_STATE].LookLRPositionCompensatorSpeed * Time.deltaTime);
+        _rotationSpeed = Mathf.Lerp(_rotationSpeed, PlayerStateModifiers[_PLAYER_STATE].RotationSpeed, RotationSpeedsAdaptSpeed * Time.deltaTime);
+        _followSpeed = Mathf.Lerp(_followSpeed, PlayerStateModifiers[_PLAYER_STATE].FollowDampFactor, FollowDampFactorAdaptSpeed * Time.deltaTime);
+        _camDist = Mathf.Lerp(_camDist, PlayerStateModifiers[_PLAYER_STATE].CamDist, CamDistsAdaptSpeed * Time.deltaTime);
 
         var pivotOffset = new Vector3(0, _pivotYAdditive + CamPivotOffsetFromPlayerY, 0);
         var camDist = Mathf.Max(GetCollisionAdjustedDis(Player.Transform.position + pivotOffset, _zoomPerc, _camDist), ClosenessConstraint);
@@ -114,6 +120,7 @@ public class CameraRig : MonoBehaviour
         var desiredCamDir = (Player.Transform.position + Player.Transform.forward * camDist - new Vector3(0, _pivotYAdditive, 0) - Player.Transform.position).normalized;
         transform.forward += (desiredCamDir - transform.forward) * Mathf.Clamp((transform.forward - desiredCamDir).magnitude, 0, Time.deltaTime * _rotationSpeed);
     }
+
     private RaycastHit[] _buff;
     private float _closestGroundHitDist;
     private float GetCollisionAdjustedDis(Vector3 playerPos, float distPercentage, float idealCamDist)
@@ -135,6 +142,6 @@ public class CameraRig : MonoBehaviour
 
     private float LRViewportPos(int dir)
     {
-        return 0.5f + ViewportDesiredLROffsetFromCenter[Player.Movement] * dir;
+        return 0.5f + PlayerStateModifiers[Player.Movement].ViewportDesiredLROffsetFromCenter * dir;
     }
 }

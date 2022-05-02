@@ -2,11 +2,6 @@
 using Assets.Utilities;
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Assets.Scripts.Player
@@ -20,7 +15,7 @@ namespace Assets.Scripts.Player
         public Transform Transform { get; private set; }
         public int Movement { get; set; } = 1;//starting from idle
         public int Orientation { get; private set; }
-        public bool IsGrounded { get; private set; }
+        public int IsGrounded { get; private set; }
 
         [field: Header("Movement & Rotation")]
 
@@ -45,7 +40,9 @@ namespace Assets.Scripts.Player
         [field: SerializeField]
         public int BufferSize { get; set; } = 5;
         [field: SerializeField]
-        public Vector2 GroundLimit { get; set; }
+        public float GroundLimit { get; set; } = 0.8f;
+        [field: SerializeField]
+        public float GroundSystemLineWidthBleed { get; set; } = 1.2f;
 
         private Rigidbody _rBody;
         private Animator _anim;
@@ -55,7 +52,7 @@ namespace Assets.Scripts.Player
         private RaycastHit[] _buff;
         private RaycastHit _closestGroundHit;
         //private float _movementInputYMagnitude;
-
+        private float _groundedLineWidth;
         private void Awake()
         {
             IEnumerator PostSimulationUpdate()
@@ -114,32 +111,42 @@ namespace Assets.Scripts.Player
             _anim = GetComponent<Animator>();
             _buff = new RaycastHit[BufferSize]; 
             Transform = transform;
+            _groundedLineWidth = GetComponent<CapsuleCollider>().radius *2 * GroundSystemLineWidthBleed;
         }
 
-        private bool CalculateIsGrounded()
+        private int CalculateIsGrounded(byte totalRays)
         {
-            int buffCount = Physics.RaycastNonAlloc(transform.position  + transform.up * ToGroundRayYOffset, -transform.up, _buff, ToGroundRayLength + ToGroundRayYOffset, GroundLayers);
-            _closestGroundHit.distance = ToGroundRayLength * 2;
-            for (byte i = 0; i < buffCount; i++)
+            for(byte r = 0; r < totalRays; r++)
             {
-                if (_closestGroundHit.distance > _buff[i].distance)
+                int buffCount = Physics.RaycastNonAlloc(transform.position + transform.up * ToGroundRayYOffset - transform.forward * (_groundedLineWidth / 3 * r), -transform.up, _buff, ToGroundRayLength + ToGroundRayYOffset, GroundLayers);
+                float dist = ToGroundRayLength * 2;
+                for (byte i = 0; i < buffCount; i++)
                 {
-                    _closestGroundHit = _buff[i];
+                    if (dist > _buff[i].distance)
+                    {
+                        dist = _buff[i].distance;
+                    }
+                }
+                dist -= ToGroundRayYOffset;
+                if(dist < GroundLimit)
+                {
+                    return 1;
                 }
             }
-            _closestGroundHit.distance -= ToGroundRayYOffset;
-            return _closestGroundHit.distance < (IsGrounded ? GroundLimit.y : GroundLimit.x);
+
+            return 0;
         }
       
         private void FixedUpdate()
         {
-            IsGrounded = CalculateIsGrounded();
+            IsGrounded = CalculateIsGrounded(2);
 
             _dampenedMovementSpeed = Mathf.Lerp(_dampenedMovementSpeed, MovementSpeeds[Movement], DampenedMovementSpeedFactor * Time.fixedDeltaTime);
 
             _dampenedOrientation = Mathf.Lerp(_dampenedOrientation, Orientation, OrientationSpeedFactors[Movement] * Time.fixedDeltaTime);
 
-            _animHandler.UpdateMovementValues(_dampenedOrientation * Mathf.Clamp01(Movement + 1), _dampenedMovementSpeed, Time.fixedDeltaTime);//must be here as this statement makes Animator generate root motion, which will work in FixedUpdate
+            _animHandler.UpdateMovementValues(_dampenedOrientation * Mathf.Clamp01(Movement + 1), _dampenedMovementSpeed, Time.fixedDeltaTime);//must be here as this statement makes Animator generate root motion
+            _anim.SetInteger("IsGrounded", IsGrounded);
         }
 
         //called in fixed update when Animator set to AnimatePhysics
@@ -148,7 +155,6 @@ namespace Assets.Scripts.Player
             Vector3 vel = _anim.velocity;
             vel.y = _rBody.velocity.y;
             _rBody.velocity = vel;
-            
         }
 
         private float _radiansPerSec;
