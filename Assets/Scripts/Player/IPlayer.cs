@@ -8,9 +8,9 @@ using UnityEngine;
 
 namespace Assets.Scripts.Player
 {
-    public interface IPlayer
+    public interface ICharacter
     {
-        IControls Brain { get; }
+        //IControls Brain { get; }
         Transform Transform { get; }
         int Orientation { get; }
         int Movement { get; }
